@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.InitializingBean;
 
 import com.asyncLog.LoggerThread;
 import com.jspider.exception.ApplicationException;
@@ -17,8 +18,9 @@ import com.jspider.metier.resultSearcher.model.ResultsModel;
 import com.jspider.model.Search;
 import com.jspider.spider.configuration.SpiderConfiguration;
 
-public class Spider {
+public class Spider implements InitializingBean {
 	private final static Logger LOGGER = LoggerFactory.getLogger(Spider.class);
+	private final static Logger THREAD_LOGGER = LoggerFactory.getLogger(Thread.class);
 
 	/**
 	 * Map url regex -> ResultSearcher
@@ -28,29 +30,54 @@ public class Spider {
 
 	private SpiderConfiguration spiderConf;
 
-	private ScheduledExecutorService scheduler = Executors
-			.newScheduledThreadPool(40);
+	private ScheduledExecutorService scheduler;
 
 	private List<LoggerThread> loggers;
 
 	public void spider(Collection<String> urls) throws ApplicationException {
-		for (LoggerThread t : loggers) {
-			scheduler.scheduleAtFixedRate(t, t.getMs(), t.getMs(),
-					TimeUnit.MILLISECONDS);
+		if (loggers != null) {
+			LOGGER.debug("Instantiating loggerThreads");
+			for (LoggerThread t : loggers) {
+				scheduler.scheduleAtFixedRate(t, t.getMs(), t.getMs(),
+						TimeUnit.MILLISECONDS);
+			}
 		}
+		long lastUrlTime = 0;
+		int nbTreatedUrls = 0;
 		while (true) {
-			while (!urls.isEmpty()) {
+			while (!urls.isEmpty()
+					&& (!isMaximumRequestedUrlReached(nbTreatedUrls))) {
+				lastUrlTime = System.currentTimeMillis();
 				String url = urls.iterator().next();
+				nbTreatedUrls++;
 				urls.remove(url);
 				Runnable worker = new SpiderThread(url, urls);
 				scheduler.execute(worker);
+
 			}
 			try {
-				Thread.sleep(1000);
+				if (urls.isEmpty()) {
+					LOGGER.trace("No more urls to request");
+				} else {
+					LOGGER.debug("Maximum number of URLs requested (" + spiderConf.getMaximumTotalRequestedUrls() + ")");
+				}
+				Thread.sleep(50);
+				if (urls.isEmpty() && System.currentTimeMillis() - lastUrlTime > spiderConf.getTimeWithoutUrls()
+						|| isMaximumRequestedUrlReached(nbTreatedUrls)) {
+					THREAD_LOGGER.debug("Shutdown scheduler");
+					scheduler.awaitTermination(spiderConf.getSchedulerTerminationWaitingTime(), TimeUnit.MILLISECONDS);
+					scheduler.shutdownNow();
+					return;
+				}
 			} catch (InterruptedException e) {
-				LOGGER.error("", e);
+				THREAD_LOGGER.error("", e);
 			}
 		}
+	}
+
+	private boolean isMaximumRequestedUrlReached(int nbRequest) {
+		return spiderConf.getMaximumTotalRequestedUrls() > 0 && nbRequest >= spiderConf
+				.getMaximumTotalRequestedUrls();
 	}
 
 	private class SpiderThread extends Thread {
@@ -64,6 +91,7 @@ public class Spider {
 
 		@Override
 		public void run() {
+			THREAD_LOGGER.debug("Run SpiderThread " + getName());
 			boolean match = false;
 			for (String pattern : mapResultSearcher.keySet()) {
 				if (url.matches(pattern)) {
@@ -96,6 +124,13 @@ public class Spider {
 			if (!match) {
 				LOGGER.warn("no matching result searcher for url " + url);
 			}
+
+			try {
+				Thread.sleep(spiderConf.getTimeBetweenSearchs());
+			} catch (InterruptedException e) {
+			}
+
+			THREAD_LOGGER.debug("End SpiderThread " + getName());
 		}
 	}
 
@@ -131,6 +166,11 @@ public class Spider {
 
 	public void setLoggers(List<LoggerThread> loggers) {
 		this.loggers = loggers;
+	}
+
+	@Override
+	public void afterPropertiesSet() throws Exception {
+		scheduler = Executors.newScheduledThreadPool(spiderConf.getNbThreads());
 	}
 
 }

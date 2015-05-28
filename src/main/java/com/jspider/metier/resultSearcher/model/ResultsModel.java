@@ -10,7 +10,7 @@ public class ResultsModel {
 	private boolean error;
 	private List<String> messages = new ArrayList<String>();
 	private int total;
-	private String nextUrl;
+	private List<String> nextUrls;
 	private List<Map<String, String>> results = new ArrayList<Map<String, String>>();;
 
 	public boolean getError() {
@@ -45,12 +45,12 @@ public class ResultsModel {
 		this.results = results;
 	}
 
-	public String getNextUrl() {
-		return nextUrl;
+	public List<String> getNextUrls() {
+		return nextUrls;
 	}
 
-	public void setNextUrl(String nextUrl) {
-		this.nextUrl = nextUrl;
+	public void setNextUrls(List<String> nextUrls) {
+		this.nextUrls = nextUrls;
 	}
 
 	public String getUrl() {

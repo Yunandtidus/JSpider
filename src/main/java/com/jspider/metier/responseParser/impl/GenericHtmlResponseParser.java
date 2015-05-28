@@ -2,6 +2,7 @@ package com.jspider.metier.responseParser.impl;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,7 +81,7 @@ public class GenericHtmlResponseParser implements ResponseParser {
 		}
 
 		if (nextUrlConfiguration != null) {
-			resultsModel.setNextUrl(getNextUrl(document));
+			resultsModel.setNextUrls(getNextUrls(document));
 		}
 
 		return getListElements(document);
@@ -112,8 +113,22 @@ public class GenericHtmlResponseParser implements ResponseParser {
 		return Integer.parseInt(parseElement(element, nbResultsConfiguration));
 	}
 
-	protected String getNextUrl(Element element) {
-		return parseElement(element, nextUrlConfiguration);
+	protected List<String> getNextUrls(Element element) {
+		Elements es = null;
+
+		List<String> ret = new ArrayList<String>();
+		if (!ListUtils.nullOrEmpty(nextUrlConfiguration)) {
+			es = nextUrlConfiguration.get(0).parseToElements(element);
+			int i;
+			for (i = 1; i < nextUrlConfiguration.size() - 1; i++) {
+				es = nextUrlConfiguration.get(i).parseToElements(es);
+			}
+
+			for (Element e : es) {
+				ret.add(nextUrlConfiguration.get(i).parse(e));
+			}
+		}
+		return ret;
 	}
 
 	private String parseElement(Element e, List<ParserConfiguration> conf) {
