@@ -3,12 +3,13 @@ package com.jspider.metier.resultSearcher.impl;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.util.Enumeration;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 import javax.naming.ConfigurationException;
 
@@ -46,39 +47,47 @@ public class GenericResultSearcher implements ResultSearcher, InitializingBean {
 		return responseParser.parse(stream, resultsModel);
 	}
 
+	@SuppressWarnings("resource")
 	@Override
 	public ResultsModel search(Search search) {
 		ResultsModel resultsModel = new ResultsModel();
+		InputStream is = null;
 		try {
 			LOG.debug("Request " + search.getUrl());
-			InputStream is = getCachedResponse(search);
+			is = getCachedResponse(search);
 			if (is == null) {
 				long time = System.currentTimeMillis();
 				is = getStream(search, resultsModel);
 				LOG.debug("HTTP Request (" + (System.currentTimeMillis() - time) + "ms) " + search.getUrl());
+				is = getResetableStream(is);
+				saveRequest(search, is);
 			} else {
+				is = getResetableStream(is);
 				LOG.debug("Cached Request " + search.getUrl());
 			}
 			if (is == null) {
+				LOG.warn("Can't find InputStream");
 				return resultsModel;
 			}
 
-			is = getResetableStream(is);
-
-			logRequest(search, is);
-
 			return convert(is, resultsModel);
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error("", e);
 		}
 		return null;
 	}
 
-	private InputStream getCachedResponse(Search search) throws FileNotFoundException {
+	private InputStream getCachedResponse(Search search) throws IOException {
 		if (saveResponseFolder != null) {
 			File cachedResponse = getResponseFile(search);
 			if (cachedResponse.exists() && !cachedResponse.isDirectory()) {
-				return new FileInputStream(cachedResponse);
+				ZipFile zip = new ZipFile(cachedResponse);
+				Enumeration<? extends ZipEntry> entries = zip.entries();
+				while (entries.hasMoreElements()) {
+					ZipEntry entry = entries.nextElement();
+					System.out.println(entry.getName());
+					return zip.getInputStream(entry);
+				}
 			}
 		}
 		return null;
@@ -88,10 +97,15 @@ public class GenericResultSearcher implements ResultSearcher, InitializingBean {
 		return new File(saveResponseFolder, getRequestIdentifier(search));
 	}
 
-	private void logRequest(Search search, InputStream is) throws IOException {
+	private void saveRequest(Search search, InputStream is) throws IOException {
 		if (saveResponseFolder != null) {
-			OutputStream fos = new FileOutputStream(getResponseFile(search));
-			IOUtils.copy(is, fos);
+			final ZipOutputStream out = new ZipOutputStream(new FileOutputStream(getResponseFile(search)));
+			ZipEntry e = new ZipEntry("page.html");
+			out.putNextEntry(e);
+			IOUtils.copy(is, out);
+
+			out.closeEntry();
+			out.close();
 
 			is.reset();
 		}
@@ -100,7 +114,8 @@ public class GenericResultSearcher implements ResultSearcher, InitializingBean {
 	private String getRequestIdentifier(Search search) {
 		String fileName = search.getUrl();
 		fileName = fileName.substring(fileName.lastIndexOf("/") + 1);
-		return "p_" + fileName;
+		fileName = fileName.replace("?", "%3F");
+		return "z" + search.getUrlIndex() + "_" + fileName;
 
 	}
 
@@ -111,6 +126,7 @@ public class GenericResultSearcher implements ResultSearcher, InitializingBean {
 
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		IOUtils.copy(is, baos);
+		is.close();
 		byte[] bytes = baos.toByteArray();
 
 		return new ByteArrayInputStream(bytes);

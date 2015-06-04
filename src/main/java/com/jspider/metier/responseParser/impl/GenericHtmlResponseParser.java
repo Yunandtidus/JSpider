@@ -32,7 +32,7 @@ public class GenericHtmlResponseParser implements ResponseParser {
 	private List<ParserConfiguration> listConfiguration;
 	private List<ParserConfiguration> elementValidator;
 	private List<ParserConfiguration> nbResultsConfiguration;
-	private List<ParserConfiguration> nextUrlConfiguration;
+	private List<List<ParserConfiguration>> nextUrlsConfigurations;
 	private Map<String, List<ParserConfiguration>> parserConfiguration;
 
 	@Override
@@ -46,7 +46,6 @@ public class GenericHtmlResponseParser implements ResponseParser {
 		LOGGER.debug(es.size() + " elements");
 		for (Element e : es) {
 			if (isValid(e)) {
-
 				Map<String, String> result = new HashMap<String, String>();
 				for (Entry<String, List<ParserConfiguration>> entry : parserConfiguration
 						.entrySet()) {
@@ -80,20 +79,19 @@ public class GenericHtmlResponseParser implements ResponseParser {
 			resultsModel.setTotal(getNbResults(document));
 		}
 
-		if (nextUrlConfiguration != null) {
+		if (nextUrlsConfigurations != null) {
 			resultsModel.setNextUrls(getNextUrls(document));
 		}
 
 		return getListElements(document);
 	}
 
-	public List<ParserConfiguration> getNextUrlConfiguration() {
-		return nextUrlConfiguration;
+	public List<List<ParserConfiguration>> getNextUrlsConfigurations() {
+		return nextUrlsConfigurations;
 	}
 
-	public void setNextUrlConfiguration(
-			List<ParserConfiguration> nextUrlConfiguration) {
-		this.nextUrlConfiguration = nextUrlConfiguration;
+	public void setNextUrlsConfigurations(List<List<ParserConfiguration>> nextUrlsConfigurations) {
+		this.nextUrlsConfigurations = nextUrlsConfigurations;
 	}
 
 	protected Elements getListElements(Element element) {
@@ -117,15 +115,17 @@ public class GenericHtmlResponseParser implements ResponseParser {
 		Elements es = null;
 
 		List<String> ret = new ArrayList<String>();
-		if (!ListUtils.nullOrEmpty(nextUrlConfiguration)) {
-			es = nextUrlConfiguration.get(0).parseToElements(element);
-			int i;
-			for (i = 1; i < nextUrlConfiguration.size() - 1; i++) {
-				es = nextUrlConfiguration.get(i).parseToElements(es);
-			}
+		for (List<ParserConfiguration> nextUrlConfiguration : nextUrlsConfigurations) {
+			if (!ListUtils.nullOrEmpty(nextUrlConfiguration)) {
+				es = nextUrlConfiguration.get(0).parseToElements(element);
+				int i;
+				for (i = 1; i < nextUrlConfiguration.size() - 1; i++) {
+					es = nextUrlConfiguration.get(i).parseToElements(es);
+				}
 
-			for (Element e : es) {
-				ret.add(nextUrlConfiguration.get(i).parse(e));
+				for (Element e : es) {
+					ret.add(nextUrlConfiguration.get(i).parse(e));
+				}
 			}
 		}
 		return ret;

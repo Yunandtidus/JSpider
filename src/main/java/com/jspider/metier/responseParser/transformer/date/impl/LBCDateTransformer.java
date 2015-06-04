@@ -4,7 +4,6 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,7 +26,6 @@ public class LBCDateTransformer implements Transformer {
 	public String transform(String arg) {
 		DateFormat resultDf = new SimpleDateFormat("dd MMMMM hh:mm");
 		DateFormat df = new SimpleDateFormat("dd MMMMM hh:mm");
-		Date date = null;
 
 		Matcher m = null;
 		int hours = 0, minutes = 0;

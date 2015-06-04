@@ -10,6 +10,7 @@ public class Search implements java.io.Serializable {
 
 	private static final long serialVersionUID = 1L;
 
+	private int urlIndex;
 	private String url;
 	private Map<String, String> criteria = new HashMap<String, String>();
 
@@ -34,6 +35,14 @@ public class Search implements java.io.Serializable {
 
 	public void setUrl(String url) {
 		this.url = url;
+	}
+
+	public int getUrlIndex() {
+		return urlIndex;
+	}
+
+	public void setUrlIndex(int urlIndex) {
+		this.urlIndex = urlIndex;
 	}
 
 }

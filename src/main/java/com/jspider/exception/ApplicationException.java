@@ -1,7 +1,8 @@
 package com.jspider.exception;
 
-
 public class ApplicationException extends Exception {
+	private static final long serialVersionUID = -7813277731835734632L;
+
 	public ApplicationException() {
 	}
 

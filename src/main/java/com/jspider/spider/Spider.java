@@ -1,6 +1,5 @@
 package com.jspider.spider;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -16,6 +15,7 @@ import com.jspider.exception.ApplicationException;
 import com.jspider.metier.resultSearcher.ResultSearcher;
 import com.jspider.metier.resultSearcher.model.ResultsModel;
 import com.jspider.model.Search;
+import com.jspider.model.urls.UrlLister;
 import com.jspider.spider.configuration.SpiderConfiguration;
 
 public class Spider implements InitializingBean {
@@ -34,7 +34,7 @@ public class Spider implements InitializingBean {
 
 	private List<LoggerThread> loggers;
 
-	public void spider(Collection<String> urls) throws ApplicationException {
+	public void spider(UrlLister urlLister) throws ApplicationException {
 		if (loggers != null) {
 			LOGGER.debug("Instantiating loggerThreads");
 			for (LoggerThread t : loggers) {
@@ -45,24 +45,23 @@ public class Spider implements InitializingBean {
 		long lastUrlTime = 0;
 		int nbTreatedUrls = 0;
 		while (true) {
-			while (!urls.isEmpty()
+			while (!urlLister.isEmpty()
 					&& (!isMaximumRequestedUrlReached(nbTreatedUrls))) {
 				lastUrlTime = System.currentTimeMillis();
-				String url = urls.iterator().next();
+				Map.Entry<String, Integer> urlEntry = urlLister.getNext();
 				nbTreatedUrls++;
-				urls.remove(url);
-				Runnable worker = new SpiderThread(url, urls);
+				Runnable worker = new SpiderThread(urlEntry.getKey(), urlLister, urlEntry.getValue());
 				scheduler.execute(worker);
 
 			}
 			try {
-				if (urls.isEmpty()) {
+				if (urlLister.isEmpty()) {
 					LOGGER.trace("No more urls to request");
 				} else {
 					LOGGER.debug("Maximum number of URLs requested (" + spiderConf.getMaximumTotalRequestedUrls() + ")");
 				}
 				Thread.sleep(50);
-				if (urls.isEmpty() && System.currentTimeMillis() - lastUrlTime > spiderConf.getTimeWithoutUrls()
+				if (urlLister.isEmpty() && System.currentTimeMillis() - lastUrlTime > spiderConf.getTimeWithoutUrls()
 						|| isMaximumRequestedUrlReached(nbTreatedUrls)) {
 					THREAD_LOGGER.debug("Shutdown scheduler");
 					scheduler.awaitTermination(spiderConf.getSchedulerTerminationWaitingTime(), TimeUnit.MILLISECONDS);
@@ -82,11 +81,13 @@ public class Spider implements InitializingBean {
 
 	private class SpiderThread extends Thread {
 		private String url;
-		private Collection<String> urls;
+		private UrlLister urlLister;
+		private int urlIndex;
 
-		public SpiderThread(String url, Collection<String> urls) {
+		public SpiderThread(String url, UrlLister urlLister, int urlIndex) {
 			this.url = url;
-			this.urls = urls;
+			this.urlLister = urlLister;
+			this.urlIndex = urlIndex;
 		}
 
 		@Override
@@ -97,21 +98,25 @@ public class Spider implements InitializingBean {
 				if (url.matches(pattern)) {
 					match = true;
 					Search s = new Search(url);
+					s.setUrlIndex(urlIndex);
 					ResultsModel result;
 					try {
 						result = mapResultSearcher.get(pattern).search(s);
 
 						if (result.getError()) {
-							LOGGER.error("Error " + result.getUrl() + " : "
-									+ result.getMessages());
+							LOGGER.error("Error " + result.getUrl() + " : " + result.getMessages());
 						} else {
-							if (mapSpiderCallback.containsKey(pattern)) {
-								mapSpiderCallback.get(pattern).callback(result,
-										urls);
-								break;
-							} else {
-								LOGGER.warn("no matching callback for url "
-										+ url);
+							boolean callback = false;
+							for (String patternCallback : mapSpiderCallback.keySet()) {
+								if (url.matches(patternCallback)) {
+									mapSpiderCallback.get(patternCallback).callback(result,
+											urlLister);
+									callback = true;
+									break;
+								}
+							}
+							if (!callback) {
+								LOGGER.warn("no matching callback for url " + url);
 							}
 						}
 					} catch (ApplicationException e) {
