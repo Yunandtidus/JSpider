@@ -7,5 +7,5 @@ public interface SpiderCallBack {
 	/**
 	 * Callback
 	 */
-	public void callback(ResultsModel rm, UrlLister urlLister);
+	public void callback(ResultsModel rm, SpiderExchange exchange, UrlLister urlLister);
 }

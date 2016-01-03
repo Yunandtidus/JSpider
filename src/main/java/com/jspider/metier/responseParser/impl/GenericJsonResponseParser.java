@@ -44,7 +44,7 @@ public class GenericJsonResponseParser implements ResponseParser {
 
 			for (int i = 0; i < items.length(); i++) {
 
-				Map<String, String> result = new HashMap<String, String>();
+				Map<String, Object> result = new HashMap<String, Object>();
 				JSONObject item = items.getJSONObject(i);
 				System.out.println("---");
 				for (Entry<String, List<ParserConfiguration>> entry : parserConfiguration.entrySet()) {

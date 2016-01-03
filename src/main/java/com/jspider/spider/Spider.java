@@ -2,9 +2,8 @@ package com.jspider.spider;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,18 +29,13 @@ public class Spider implements InitializingBean {
 
 	private SpiderConfiguration spiderConf;
 
-	private ScheduledExecutorService scheduler;
+	private ExecutorService scheduler;
 
 	private List<LoggerThread> loggers;
 
+	private SpiderExchange spiderExchange;
+
 	public void spider(UrlLister urlLister) throws ApplicationException {
-		if (loggers != null) {
-			LOGGER.debug("Instantiating loggerThreads");
-			for (LoggerThread t : loggers) {
-				scheduler.scheduleAtFixedRate(t, t.getMs(), t.getMs(),
-						TimeUnit.MILLISECONDS);
-			}
-		}
 		long lastUrlTime = 0;
 		int nbTreatedUrls = 0;
 		while (true) {
@@ -50,7 +44,7 @@ public class Spider implements InitializingBean {
 				lastUrlTime = System.currentTimeMillis();
 				Map.Entry<String, Integer> urlEntry = urlLister.getNext();
 				nbTreatedUrls++;
-				Runnable worker = new SpiderThread(urlEntry.getKey(), urlLister, urlEntry.getValue());
+				Runnable worker = new SpiderThread(urlEntry.getKey(), urlLister, urlEntry.getValue(), spiderExchange);
 				scheduler.execute(worker);
 
 			}
@@ -61,10 +55,8 @@ public class Spider implements InitializingBean {
 					LOGGER.debug("Maximum number of URLs requested (" + spiderConf.getMaximumTotalRequestedUrls() + ")");
 				}
 				Thread.sleep(50);
-				if (urlLister.isEmpty() && System.currentTimeMillis() - lastUrlTime > spiderConf.getTimeWithoutUrls()
-						|| isMaximumRequestedUrlReached(nbTreatedUrls)) {
-					THREAD_LOGGER.debug("Shutdown scheduler");
-					scheduler.awaitTermination(spiderConf.getSchedulerTerminationWaitingTime(), TimeUnit.MILLISECONDS);
+				if (shouldShutdown(urlLister, lastUrlTime, nbTreatedUrls)) {
+					THREAD_LOGGER.info("Shutdown scheduler");
 					scheduler.shutdownNow();
 					return;
 				}
@@ -72,6 +64,34 @@ public class Spider implements InitializingBean {
 				THREAD_LOGGER.error("", e);
 			}
 		}
+	}
+
+	private boolean shouldShutdown(UrlLister urlLister, long lastUrlTime, int nbTreatedUrls) {
+		if (isMaximumRequestedUrlReached(nbTreatedUrls)) {
+			THREAD_LOGGER.debug("Should shutdown cause maximum requested Url reached("
+					+ spiderConf.getMaximumTotalRequestedUrls() + ")");
+
+			if (urlLister.urlProcessing()) {
+				return false;
+			} else {
+				return true;
+			}
+		}
+		if (urlLister.isEmpty()) {
+			if (System.currentTimeMillis() - lastUrlTime > spiderConf.getTimeWithoutUrls()) {
+				THREAD_LOGGER.debug("Should shutdown, waiting time ellapsed");
+				return true;
+			}
+			if (urlLister.isDontWaitMore()) {
+				THREAD_LOGGER.debug("Should shutdown cause no more urls and should not wait");
+				if (urlLister.urlProcessing()) {
+					return false;
+				} else {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private boolean isMaximumRequestedUrlReached(int nbRequest) {
@@ -83,59 +103,71 @@ public class Spider implements InitializingBean {
 		private String url;
 		private UrlLister urlLister;
 		private int urlIndex;
+		private SpiderExchange exchange;
 
-		public SpiderThread(String url, UrlLister urlLister, int urlIndex) {
+		public SpiderThread(String url, UrlLister urlLister, int urlIndex, SpiderExchange exchange) {
 			this.url = url;
 			this.urlLister = urlLister;
 			this.urlIndex = urlIndex;
+			this.exchange = exchange;
 		}
 
 		@Override
 		public void run() {
-			THREAD_LOGGER.debug("Run SpiderThread " + getName());
-			boolean match = false;
-			for (String pattern : mapResultSearcher.keySet()) {
-				if (url.matches(pattern)) {
-					match = true;
-					Search s = new Search(url);
-					s.setUrlIndex(urlIndex);
-					ResultsModel result;
-					try {
-						result = mapResultSearcher.get(pattern).search(s);
-
-						if (result.getError()) {
-							LOGGER.error("Error " + result.getUrl() + " : " + result.getMessages());
-						} else {
-							boolean callback = false;
-							for (String patternCallback : mapSpiderCallback.keySet()) {
-								if (url.matches(patternCallback)) {
-									mapSpiderCallback.get(patternCallback).callback(result,
-											urlLister);
-									callback = true;
-									break;
+			boolean shouldWait = true;
+			try {
+				THREAD_LOGGER.debug("Run SpiderThread " + getName());
+				boolean match = false;
+				for (String pattern : mapResultSearcher.keySet()) {
+					if (url.matches(pattern)) {
+						match = true;
+						Search s = new Search(url);
+						s.setUrlIndex(urlIndex);
+						ResultsModel result;
+						try {
+							result = mapResultSearcher.get(pattern).search(s);
+							if (result == null) {
+								LOGGER.error("No result found for request : " + url);
+							} else if (result.getError()) {
+								LOGGER.error("Error " + result.getUrl() + " : " + result.getMessages());
+							} else {
+								shouldWait = !result.isCachedRequest();
+								boolean callback = false;
+								for (String patternCallback : mapSpiderCallback.keySet()) {
+									if (url.matches(patternCallback)) {
+										mapSpiderCallback.get(patternCallback).callback(result, exchange, urlLister);
+										callback = true;
+										break;
+									}
+								}
+								if (!callback) {
+									LOGGER.warn("no matching callback for url " + url);
 								}
 							}
-							if (!callback) {
-								LOGGER.warn("no matching callback for url " + url);
-							}
+						} catch (ApplicationException e) {
+							LOGGER.error("", e);
+							break;
 						}
-					} catch (ApplicationException e) {
-						LOGGER.error("", e);
-						break;
 					}
 				}
-			}
 
-			if (!match) {
-				LOGGER.warn("no matching result searcher for url " + url);
-			}
+				if (!match) {
+					LOGGER.warn("no matching result searcher for url " + url);
+				}
 
-			try {
-				Thread.sleep(spiderConf.getTimeBetweenSearchs());
-			} catch (InterruptedException e) {
-			}
+				urlLister.processed(url);
 
-			THREAD_LOGGER.debug("End SpiderThread " + getName());
+				try {
+					if (shouldWait) {
+						Thread.sleep(spiderConf.getTimeBetweenSearchs());
+					}
+				} catch (InterruptedException e) {
+				}
+
+				THREAD_LOGGER.debug("End SpiderThread " + getName());
+			} catch (Throwable t) {
+				LOGGER.error("", t);
+			}
 		}
 	}
 
@@ -175,7 +207,15 @@ public class Spider implements InitializingBean {
 
 	@Override
 	public void afterPropertiesSet() throws Exception {
-		scheduler = Executors.newScheduledThreadPool(spiderConf.getNbThreads());
+		scheduler = Executors.newFixedThreadPool(spiderConf.getNbThreads());
+	}
+
+	public SpiderExchange getSpiderExchange() {
+		return spiderExchange;
+	}
+
+	public void setSpiderExchange(SpiderExchange spiderExchange) {
+		this.spiderExchange = spiderExchange;
 	}
 
 }

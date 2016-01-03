@@ -19,11 +19,6 @@ public class SpiderConfiguration {
 	 */
 	private int timeWithoutUrls = 10000;
 
-	/***
-	 * 
-	 */
-	private int schedulerTerminationWaitingTime = 5000;
-
 	/**
 	 * 
 	 */
@@ -60,14 +55,6 @@ public class SpiderConfiguration {
 
 	public void setNbThreads(int nbThreads) {
 		this.nbThreads = nbThreads;
-	}
-
-	public int getSchedulerTerminationWaitingTime() {
-		return schedulerTerminationWaitingTime;
-	}
-
-	public void setSchedulerTerminationWaitingTime(int schedulerTerminationWaitingTime) {
-		this.schedulerTerminationWaitingTime = schedulerTerminationWaitingTime;
 	}
 
 	public int getMaximumTotalRequestedUrls() {

@@ -28,9 +28,11 @@ public class ParserConfiguration {
 	private boolean urlDecode = false;
 	private Transformer transformer;
 
-	public String parse(Element e) {
+	public Object parse(Element e) {
 		String val = null;
 		switch (this.elementParser) {
+		case ELEMENT:
+			return e;
 		case CONSTANT:
 			val = this.value;
 			break;
@@ -102,6 +104,9 @@ public class ParserConfiguration {
 	public Element parseToElement(Element e) {
 		Elements es = null;
 		switch (this.elementParser) {
+		case GET_CHILDREN:
+			es = e.children();
+			break;
 		case GET_ELEMENT_BY_TAG:
 			es = e.getElementsByTag(this.value);
 			break;

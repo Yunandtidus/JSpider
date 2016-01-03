@@ -12,6 +12,7 @@ public class Search implements java.io.Serializable {
 
 	private int urlIndex;
 	private String url;
+	private String referer;
 	private Map<String, String> criteria = new HashMap<String, String>();
 
 	public Search() {
@@ -43,6 +44,14 @@ public class Search implements java.io.Serializable {
 
 	public void setUrlIndex(int urlIndex) {
 		this.urlIndex = urlIndex;
+	}
+
+	public String getReferer() {
+		return referer;
+	}
+
+	public void setReferer(String referer) {
+		this.referer = referer;
 	}
 
 }

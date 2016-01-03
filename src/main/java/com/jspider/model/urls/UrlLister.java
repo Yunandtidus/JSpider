@@ -15,11 +15,16 @@ public class UrlLister extends ArrayList<String> {
 	private static final long serialVersionUID = -3213976523111703513L;
 	private Set<String> alreadyReadUrls;
 
+	private Set<String> processingUrls;
+
 	private int urlIndex = 0;
+
+	private boolean dontWaitMore = false;
 
 	public UrlLister(int urlIndex) {
 		this.setUrlIndex(urlIndex);
 		alreadyReadUrls = new HashSet<String>();
+		processingUrls = new HashSet<String>();
 	}
 
 	@Override
@@ -44,7 +49,12 @@ public class UrlLister extends ArrayList<String> {
 	public Map.Entry<String, Integer> getNext() {
 		String url = this.iterator().next();
 		this.remove(url);
+		processingUrls.add(url);
 		return new AbstractMap.SimpleEntry(url, urlIndex++);
+	}
+
+	public void processed(String url) {
+		processingUrls.remove(url);
 	}
 
 	public int getUrlIndex() {
@@ -54,4 +64,17 @@ public class UrlLister extends ArrayList<String> {
 	public void setUrlIndex(int urlIndex) {
 		this.urlIndex = urlIndex;
 	}
+
+	public boolean urlProcessing() {
+		return !processingUrls.isEmpty();
+	}
+
+	public boolean isDontWaitMore() {
+		return dontWaitMore;
+	}
+
+	public void setDontWaitMore(boolean dontWaitMore) {
+		this.dontWaitMore = dontWaitMore;
+	}
+
 }

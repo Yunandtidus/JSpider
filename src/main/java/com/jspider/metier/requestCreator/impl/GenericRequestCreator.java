@@ -39,6 +39,7 @@ public class GenericRequestCreator implements RequestCreator {
 	@Override
 	public InputStream request(ResultsModel resultsModel, Search search)
 			throws ApplicationException {
+		HttpResponse httpResponse = null;
 		try {
 			RequestContainer requestContainer = new RequestContainer();
 			String url = baseUrl;
@@ -69,14 +70,21 @@ public class GenericRequestCreator implements RequestCreator {
 				LOGGER.debug("GET url : " + url);
 				request = Request.Get(url);
 			}
+
+			if (search.getReferer() != null) {
+				request.setHeader("Referer", search.getReferer());
+			}
+
 			Response response = request.execute();
-			HttpResponse httpResponse = response.returnResponse();
+			httpResponse = response.returnResponse();
 			if (httpResponse.getStatusLine().getStatusCode() != 200) {
 				resultsModel.setError(true);
 				resultsModel.setMessages(Arrays.asList("Error "
 						+ httpResponse.getStatusLine().getStatusCode()));
 				return null;
 			}
+			System.out.println(Arrays.asList(httpResponse.getHeaders("Content-Disposition")));
+
 			return httpResponse.getEntity().getContent();
 		} catch (Exception e) {
 			LOGGER.error("", e);

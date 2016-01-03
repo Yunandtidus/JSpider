@@ -11,7 +11,9 @@ public class ResultsModel {
 	private List<String> messages = new ArrayList<String>();
 	private int total;
 	private List<String> nextUrls;
-	private List<Map<String, String>> results = new ArrayList<Map<String, String>>();;
+	private List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();;
+
+	private boolean cachedRequest;
 
 	public boolean getError() {
 		return error;
@@ -37,11 +39,11 @@ public class ResultsModel {
 		this.total = total;
 	}
 
-	public List<Map<String, String>> getResults() {
+	public List<Map<String, Object>> getResults() {
 		return results;
 	}
 
-	public void setResults(List<Map<String, String>> results) {
+	public void setResults(List<Map<String, Object>> results) {
 		this.results = results;
 	}
 
@@ -63,7 +65,17 @@ public class ResultsModel {
 
 	@Override
 	public String toString() {
+		if (error) {
+			return "Error : " + messages;
+		}
 		return results.toString();
 	}
 
+	public boolean isCachedRequest() {
+		return cachedRequest;
+	}
+
+	public void setCachedRequest(boolean cachedRequest) {
+		this.cachedRequest = cachedRequest;
+	}
 }

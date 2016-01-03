@@ -6,9 +6,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Enumeration;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import javax.naming.ConfigurationException;
@@ -24,6 +22,7 @@ import com.jspider.metier.responseParser.ResponseParser;
 import com.jspider.metier.resultSearcher.ResultSearcher;
 import com.jspider.metier.resultSearcher.model.ResultsModel;
 import com.jspider.model.Search;
+import com.jspider.utils.FileUtils;
 
 public class GenericResultSearcher implements ResultSearcher, InitializingBean {
 
@@ -53,21 +52,27 @@ public class GenericResultSearcher implements ResultSearcher, InitializingBean {
 		ResultsModel resultsModel = new ResultsModel();
 		InputStream is = null;
 		try {
-			LOG.debug("Request " + search.getUrl());
+			LOG.info("Request " + search.getUrl());
 			is = getCachedResponse(search);
 			if (is == null) {
 				long time = System.currentTimeMillis();
 				is = getStream(search, resultsModel);
-				LOG.debug("HTTP Request (" + (System.currentTimeMillis() - time) + "ms) " + search.getUrl());
+				LOG.info("HTTP Request (" + (System.currentTimeMillis() - time) + "ms) " + search.getUrl());
 				is = getResetableStream(is);
 				saveRequest(search, is);
 			} else {
+				resultsModel.setCachedRequest(true);
 				is = getResetableStream(is);
-				LOG.debug("Cached Request " + search.getUrl());
+				LOG.info("Cached Request " + search.getUrl());
 			}
 			if (is == null) {
 				LOG.warn("Can't find InputStream");
 				return resultsModel;
+			}
+
+			if (LOG.isTraceEnabled()) {
+				IOUtils.copy(is, System.out);
+				is.reset();
 			}
 
 			return convert(is, resultsModel);
@@ -81,13 +86,7 @@ public class GenericResultSearcher implements ResultSearcher, InitializingBean {
 		if (saveResponseFolder != null) {
 			File cachedResponse = getResponseFile(search);
 			if (cachedResponse.exists() && !cachedResponse.isDirectory()) {
-				ZipFile zip = new ZipFile(cachedResponse);
-				Enumeration<? extends ZipEntry> entries = zip.entries();
-				while (entries.hasMoreElements()) {
-					ZipEntry entry = entries.nextElement();
-					System.out.println(entry.getName());
-					return zip.getInputStream(entry);
-				}
+				return FileUtils.getFromZipFile(cachedResponse);
 			}
 		}
 		return null;
@@ -98,7 +97,7 @@ public class GenericResultSearcher implements ResultSearcher, InitializingBean {
 	}
 
 	private void saveRequest(Search search, InputStream is) throws IOException {
-		if (saveResponseFolder != null) {
+		if (saveResponseFolder != null && is != null) {
 			final ZipOutputStream out = new ZipOutputStream(new FileOutputStream(getResponseFile(search)));
 			ZipEntry e = new ZipEntry("page.html");
 			out.putNextEntry(e);
@@ -115,11 +114,14 @@ public class GenericResultSearcher implements ResultSearcher, InitializingBean {
 		String fileName = search.getUrl();
 		fileName = fileName.substring(fileName.lastIndexOf("/") + 1);
 		fileName = fileName.replace("?", "%3F");
-		return "z" + search.getUrlIndex() + "_" + fileName;
+		return "z_" + fileName;
 
 	}
 
 	private InputStream getResetableStream(InputStream is) throws IOException {
+		if (is == null) {
+			return null;
+		}
 		if (is.markSupported()) {
 			return is;
 		}

@@ -46,10 +46,10 @@ public class GenericHtmlResponseParser implements ResponseParser {
 		LOGGER.debug(es.size() + " elements");
 		for (Element e : es) {
 			if (isValid(e)) {
-				Map<String, String> result = new HashMap<String, String>();
+				Map<String, Object> result = new HashMap<String, Object>();
 				for (Entry<String, List<ParserConfiguration>> entry : parserConfiguration
 						.entrySet()) {
-					String val = parseElement(e, entry.getValue());
+					Object val = parseElement(e, entry.getValue());
 					LOGGER.debug(entry.getKey() + " > " + val);
 					result.put(entry.getKey(), val);
 				}
@@ -108,7 +108,7 @@ public class GenericHtmlResponseParser implements ResponseParser {
 	}
 
 	protected int getNbResults(Element element) {
-		return Integer.parseInt(parseElement(element, nbResultsConfiguration));
+		return Integer.parseInt(parseElement(element, nbResultsConfiguration).toString());
 	}
 
 	protected List<String> getNextUrls(Element element) {
@@ -124,14 +124,14 @@ public class GenericHtmlResponseParser implements ResponseParser {
 				}
 
 				for (Element e : es) {
-					ret.add(nextUrlConfiguration.get(i).parse(e));
+					ret.add(nextUrlConfiguration.get(i).parse(e).toString());
 				}
 			}
 		}
 		return ret;
 	}
 
-	private String parseElement(Element e, List<ParserConfiguration> conf) {
+	private Object parseElement(Element e, List<ParserConfiguration> conf) {
 		Element curr = e;
 		int i = 0;
 		for (i = 0; i < conf.size() - 1 && curr != null; i++) {
